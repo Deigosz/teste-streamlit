@@ -16,7 +16,16 @@ def get_image_path(path):
 
 
 # --- Simulação de banco de dados de produtos ---
-produtos = pd.read_csv(r"db/dbitens.csv", sep=';')
+
+caminho_csv = os.path.join(base_path, "db", "dbitens.csv")
+
+
+if os.path.exists(caminho_csv):
+    produtos = pd.read_csv(caminho_csv, sep=';')
+else:
+    st.error("❌ Arquivo db/dbitens.csv não encontrado! Verifique se ele foi incluído no repositório.")
+    st.stop()
+# produtos = pd.read_csv(r"db/dbitens.csv", sep=';')
 produtos = produtos.rename(columns={
     "descricao": "produto",
     "qtd_por_caixa": "quantidade_por_caixa",
