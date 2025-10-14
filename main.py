@@ -1,284 +1,427 @@
 import streamlit as st
 import pandas as pd
 import os
+import json
 import time
 
-# --- Configuração de Caminhos e Inicialização ---
-# Nota: Para um ambiente real, o ideal é usar um banco de dados (como Firestore ou PostgreSQL)
-# para persistência e colaboração, mas para este ambiente local, usaremos CSV com autosave.
+# --- Configuração Inicial e Constantes ---
+st.set_page_config(layout="wide", page_title="Stock Fast Laticínio")
 
-# Define o caminho base e o diretório de dados
 BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_PATH, "db")
+INVENTORY_DB_FILE = os.path.join(DB_PATH, "inventory_db.json")
+
+# Garante que a pasta 'db' exista
 if not os.path.exists(DB_PATH):
     os.makedirs(DB_PATH)
 
-PRODUTOS_CSV = os.path.join(DB_PATH, "dbItens.csv")
-CONTAGENS_CSV = os.path.join(DB_PATH, "contagens_ativas.csv")
+# --- MOCK DE DADOS DE PRODUTOS (Simulando dbItens.csv com Marca e Tipo) ---
+MOCK_PRODUCTS = [
+    {'codigo': 'L001', 'produto': 'Leite Integral 1L', 'marca': 'Líder', 'tipo': 'Leite UHT', 'quantidade_por_caixa': 12, 'quantidade_por_pallet': 1080, 'quantidade_por_camada': 60},
+    {'codigo': 'L002', 'produto': 'Leite Semi-Desnatado 1L', 'marca': 'Líder', 'tipo': 'Leite UHT', 'quantidade_por_caixa': 12, 'quantidade_por_pallet': 1080, 'quantidade_por_camada': 60},
+    {'codigo': 'A005', 'produto': 'Iogurte Natural 170g', 'marca': 'Aurora', 'tipo': 'Refrigerado', 'quantidade_por_caixa': 24, 'quantidade_por_pallet': 2160, 'quantidade_por_camada': 120},
+    {'codigo': 'X101', 'produto': 'Creme de Leite 200g', 'marca': 'Xuxa', 'tipo': 'Culinário', 'quantidade_por_caixa': 27, 'quantidade_por_pallet': 1944, 'quantidade_por_camada': 108},
+    {'codigo': 'A006', 'produto': 'Mussarela Fatiada 1kg', 'marca': 'Aurora', 'tipo': 'Refrigerado', 'quantidade_por_caixa': 10, 'quantidade_por_pallet': 800, 'quantidade_por_camada': 40},
+]
+PRODUCTS_DF = pd.DataFrame(MOCK_PRODUCTS).astype({'quantidade_por_caixa': int, 'quantidade_por_pallet': int, 'quantidade_por_camada': int})
 
-# Exemplo de conteúdo mock para dbItens.csv, caso o arquivo não exista
-MOCK_PRODUTOS = pd.DataFrame({
-    "codigo": [1001, 1002, 2005, 3010],
-    "descricao": ["Leite Integral 1L", "Leite Semidesnatado 1L", "Creme de Leite 200g", "Iogurte Natural 170g"],
-    "qtd_por_caixa": [12, 12, 27, 24],
-    "qtd_por_camada": [60, 60, 108, 120],
-    "qtd_por_pallet": [1080, 1080, 1944, 2160]
-}).rename(columns={
-    "descricao": "produto",
-    "qtd_por_caixa": "quantidade_por_caixa",
-    "qtd_por_pallet": "quantidade_por_pallet",
-    "qtd_por_camada": "quantidade_por_camada"
-})
 
-def carregar_dados_produtos():
-    """Carrega ou simula a base de dados de produtos."""
-    try:
-        if os.path.exists(PRODUTOS_CSV):
-            produtos = pd.read_csv(PRODUTOS_CSV, sep=';')
-            # Garante que as colunas tenham os nomes esperados
-            produtos = produtos.rename(columns={
-                "descricao": "produto",
-                "qtd_por_caixa": "quantidade_por_caixa",
-                "qtd_por_pallet": "quantidade_por_pallet",
-                "qtd_por_camada": "quantidade_por_camada"
-            })
-            return produtos
-        else:
-            st.warning(f"⚠️ Arquivo de produtos '{PRODUTOS_CSV}' não encontrado. Usando dados mock para demonstração.")
-            return MOCK_PRODUTOS
-    except Exception as e:
-        st.error(f"Erro ao carregar produtos: {e}")
+# --- Funções de Persistência (Simulação de Banco de Dados) ---
+
+def load_db():
+    """Carrega as fichas de contagem do arquivo JSON."""
+    if os.path.exists(INVENTORY_DB_FILE):
+        try:
+            with open(INVENTORY_DB_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            st.error("Erro ao ler o arquivo de dados. Criando um novo arquivo.")
+            return {"sheets": []}
+    return {"sheets": []}
+
+def save_db(db_data):
+    """Salva as fichas de contagem no arquivo JSON."""
+    with open(INVENTORY_DB_FILE, 'w', encoding='utf-8') as f:
+        json.dump(db_data, f, ensure_ascii=False, indent=4)
+
+
+# --- Inicialização do Estado (Apenas na Primeira Execução) ---
+
+if 'db_data' not in st.session_state:
+    st.session_state.db_data = load_db()
+
+    # Define a ficha selecionada (a mais recente ou cria uma)
+    if not st.session_state.db_data["sheets"]:
+        st.session_state.selected_sheet_id = None
+    else:
+        st.session_state.selected_sheet_id = st.session_state.db_data["sheets"][-1]["id"] # Pega a última ficha
+
+    # Estado da interface
+    st.session_state.barracao = 'A'
+    st.session_state.rua = '01'
+    st.session_state.drive_inicial = 1
+    st.session_state.drive_final = 1
+    st.session_state.qtd_input = 0
+    st.session_state.tipo_contagem = 'Pallets'
+    st.session_state.marca_filter = 'TODAS'
+    st.session_state.tipo_filter = 'TODAS'
+    st.session_state.selected_product_code = PRODUCTS_DF.iloc[0]['codigo']
+
+# --- Funções de Lógica ---
+
+def create_sheet():
+    """Cria uma nova ficha de contagem e a salva no DB."""
+    new_id = f"sheet_{int(time.time())}"
+    new_name = f"Ficha {time.strftime('%Y-%m-%d %H:%M')}"
+    new_sheet = {
+        "id": new_id,
+        "name": new_name,
+        "createdAt": time.time(),
+        "counts": [] # Lista para armazenar as contagens
+    }
+    st.session_state.db_data["sheets"].append(new_sheet)
+    st.session_state.selected_sheet_id = new_id
+    save_db(st.session_state.db_data)
+    st.success(f"✅ Ficha '{new_name}' criada e selecionada!")
+    # Força um re-run para atualizar a UI
+    st.rerun() 
+
+# Garante que haja pelo menos uma ficha ao iniciar
+if not st.session_state.db_data["sheets"]:
+    if st.button("Criar Primeira Ficha de Contagem"):
+        create_sheet()
+    else:
+        st.info("Para começar, crie uma Ficha de Contagem.")
         st.stop()
 
-def carregar_contagens_existentes():
-    """Carrega as contagens ativas ou cria um DataFrame vazio."""
-    if os.path.exists(CONTAGENS_CSV):
-        try:
-            return pd.read_csv(CONTAGENS_CSV, sep=';')
-        except:
-            return pd.DataFrame(columns=[
-                "barracao", "rua", "codigo", "produto",
-                "tipo_contagem", "quantidade_informada", "quantidade_total_unidades"
-            ])
-    return pd.DataFrame(columns=[
-        "barracao", "rua", "codigo", "produto",
-        "tipo_contagem", "quantidade_informada", "quantidade_total_unidades"
-    ])
 
-def salvar_contagens(df):
-    """Salva o DataFrame de contagens ativas automaticamente."""
-    df.to_csv(CONTAGENS_CSV, index=False, sep=';')
+def get_current_sheet():
+    """Retorna a ficha de contagem atualmente selecionada."""
+    if not st.session_state.selected_sheet_id:
+        return None
+    
+    sheet = next((s for s in st.session_state.db_data["sheets"] if s["id"] == st.session_state.selected_sheet_id), None)
+    return sheet
 
-# --- Execução Principal e Inicialização de Estado ---
 
-produtos_df = carregar_dados_produtos()
-produtos_df = produtos_df.astype({'codigo': str, 'quantidade_por_caixa': int, 'quantidade_por_pallet': int, 'quantidade_por_camada': int})
+def calculate_total_units(quantity, product_info, type_contagem):
+    """Calcula o total de unidades com base no tipo de contagem."""
+    if product_info.empty:
+        return 0
+        
+    product = product_info.iloc[0]
+    
+    if type_contagem == 'Pallets':
+        return int(quantity * product['quantidade_por_pallet'] * product['quantidade_por_caixa'])
+    elif type_contagem == 'Caixas':
+        return int(quantity * product['quantidade_por_caixa'])
+    elif type_contagem == 'Unidades':
+        return int(quantity)
+    return 0
 
-if "contagens" not in st.session_state:
-    st.session_state.contagens = carregar_contagens_existentes()
+def handle_submit_count(product_info, total_calculado):
+    """
+    Processa a contagem, lida com Range Counting e Auto-Advance da Rua.
+    """
+    barracao = st.session_state.barracao
+    rua = st.session_state.rua
+    drive_inicial = st.session_state.drive_inicial
+    drive_final = st.session_state.drive_final
+    qtd = st.session_state.qtd_input
+    tipo = st.session_state.tipo_contagem
+    
+    current_sheet = get_current_sheet()
+    
+    if not current_sheet or qtd <= 0 or drive_inicial > drive_final:
+        st.error("🚨 Erro: Verifique a ficha, quantidade ou drives.")
+        return
 
-st.set_page_config(layout="wide")
+    product_code = product_info.iloc[0]['codigo']
+    product_name = product_info.iloc[0]['produto']
+    
+    drives = range(drive_inicial, drive_final + 1)
+    counts_updated = 0
 
-st.title("🥛 Contagem de Estoque Laticínio - Versão Rápida")
+    for drive in drives:
+        count_id = f"{barracao}_{rua}_{drive}_{product_code}"
+        
+        new_count = {
+            "id": count_id,
+            "barracao": barracao,
+            "rua": rua,
+            "drive": drive,
+            "codigo": product_code,
+            "produto": product_name,
+            "tipo_contagem": tipo,
+            "quantidade_informada": qtd,
+            "quantidade_total_unidades": total_calculado,
+            "timestamp": time.time()
+        }
+        
+        # Procura por uma contagem existente (para UPDATE)
+        found = False
+        for i, count in enumerate(current_sheet["counts"]):
+            if count["id"] == count_id:
+                # Atualiza a contagem existente (permite correção rápida)
+                current_sheet["counts"][i] = new_count
+                found = True
+                counts_updated += 1
+                break
+        
+        if not found:
+            # Adiciona a nova contagem
+            current_sheet["counts"].append(new_count)
+            counts_updated += 1
+
+    # Salva a alteração no arquivo JSON
+    save_db(st.session_state.db_data)
+    
+    # --- Lógica de Auto-Advance de Rua ---
+    if counts_updated > 0:
+        st.session_state.qtd_input = 0 # Zera a quantidade para a próxima entrada
+        
+        # Se foi uma contagem de drive único (ou a última rua)
+        if drive_inicial == drive_final:
+            ruas_list = [f"{i:02d}" for i in range(1, 31)]
+            current_index = ruas_list.index(rua)
+            
+            if current_index < len(ruas_list) - 1:
+                # Avança para a próxima rua
+                st.session_state.rua = ruas_list[current_index + 1]
+                st.session_state.drive_inicial = 1
+                st.session_state.drive_final = 1
+                st.success(f"✅ Contagem(ns) registrada(s)! Avançando para Rua {st.session_state.rua}.")
+            else:
+                st.session_state.rua = '01'
+                st.warning("⚠️ Fim das Ruas! Voltando para '01'. Sugerimos mudar o Barracão.")
+
+# --- UI PRINCIPAL ---
+
+st.title("🥛 Stock Fast: Contagem de Estoque - Streamlit")
 st.markdown("---")
 
-# 1. SELEÇÃO DE LOCAL (BARRACÃO E RUA)
-# Foco na Rua, pois a contagem é sequencial por rua.
-col1, col2, col3 = st.columns([1, 1, 3])
+current_sheet = get_current_sheet()
+if not current_sheet:
+    st.warning("⚠️ Nenhuma ficha de contagem selecionada ou criada.")
+    st.stop()
+
+
+# --- 1. SELEÇÃO E GERENCIAMENTO DE FICHA ---
+st.header(f"📍 Ficha Ativa: {current_sheet['name']}")
+
+col_sheet, col_new = st.columns([3, 1])
+sheet_options = {s["id"]: s["name"] for s in st.session_state.db_data["sheets"]}
+
+with col_sheet:
+    st.session_state.selected_sheet_id = st.selectbox(
+        "Selecione a Ficha de Contagem:",
+        options=list(sheet_options.keys()),
+        format_func=lambda x: sheet_options[x],
+        index=list(sheet_options.keys()).index(st.session_state.selected_sheet_id) if st.session_state.selected_sheet_id in sheet_options else 0,
+        key='sheet_selector'
+    )
+with col_new:
+    st.button("➕ Nova Ficha", on_click=create_sheet, use_container_width=True)
+
+st.markdown("---")
+
+# --- 2. LOCAL DE CONTAGEM (BARRACÃO, RUA, DRIVES) ---
+
+st.subheader("🗺️ Localização e Drives")
+col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
 with col1:
-    barracoes = ["A", "B", "C", "D", "E", "F", "G"]
-    barracao = st.selectbox("1. 🏢 Barracão:", barracoes, index=0)
+    st.session_state.barracao = st.selectbox(
+        "🏢 Barracão:", ["A", "B", "C", "D", "E", "F", "G"],
+        index=["A", "B", "C", "D", "E", "F", "G"].index(st.session_state.barracao),
+        key='barracao'
+    )
 
 with col2:
     ruas = [f"{i:02d}" for i in range(1, 31)]
-    # Mantém o valor da sessão se existir, para agilizar a contagem sequencial
-    if 'rua_selecionada' not in st.session_state:
-         st.session_state.rua_selecionada = None
-    
-    rua = st.selectbox("2. 🛣️ Rua:", ruas, key='rua_selecionada', index=None, placeholder="Selecione a rua...")
+    st.session_state.rua = st.selectbox(
+        "🛣️ Rua:", ruas,
+        index=ruas.index(st.session_state.rua),
+        key='rua'
+    )
 
 with col3:
-    if barracao and rua:
-        st.success(f"LOCAL ATUAL: Barracão {barracao} / Rua {rua}", icon="📍")
-    else:
-        st.info("Selecione o Barracão e a Rua para começar a contagem.")
+    st.session_state.drive_inicial = st.number_input(
+        "Drive Inicial:", min_value=1, step=1, value=st.session_state.drive_inicial, key='drive_inicial'
+    )
+
+with col4:
+    st.session_state.drive_final = st.number_input(
+        "Drive Final:", min_value=st.session_state.drive_inicial, step=1, value=st.session_state.drive_final, key='drive_final'
+    )
+
+drives_count = st.session_state.drive_final - st.session_state.drive_inicial + 1
+st.info(f"📍 **Local Atual:** Barracão **{st.session_state.barracao}**, Rua **{st.session_state.rua}**. Contando **{drives_count} drive(s)**.")
+
+# Checagem de alerta para rua já contada
+rua_has_counts = any(c['barracao'] == st.session_state.barracao and c['rua'] == st.session_state.rua for c in current_sheet['counts'])
+if rua_has_counts:
+    st.warning(f"⚠️ **Atenção:** A Rua {st.session_state.rua} já possui contagens nesta ficha. A nova contagem será adicionada/atualizada.")
 
 st.markdown("---")
 
-# 2. SELEÇÃO DE PRODUTO
-# Usa o código e a descrição para facilitar a busca rápida ou simular o scanner
-opcoes_produto_formatadas = [f"[{row['codigo']}] {row['produto']}" for index, row in produtos_df.iterrows()]
+# --- 3. SELEÇÃO DE PRODUTO COM FILTROS (Marca e Tipo) ---
 
-produto_selecionado_str = st.selectbox(
-    "3. 🔎 Produto (Digite Código ou Nome):",
-    opcoes_produto_formatadas,
-    index=0 # Assume-se que o primeiro produto é um bom default
+st.subheader("🔎 Produto (Filtros e Busca)")
+
+col_marca, col_tipo = st.columns(2)
+marcas = ['TODAS'] + sorted(PRODUCTS_DF['marca'].unique().tolist())
+tipos = ['TODOS'] + sorted(PRODUCTS_DF['tipo'].unique().tolist())
+
+with col_marca:
+    st.session_state.marca_filter = st.selectbox(
+        "Filtrar por Marca:", marcas,
+        index=marcas.index(st.session_state.marca_filter) if st.session_state.marca_filter in marcas else 0,
+        key='marca_filter'
+    )
+    
+with col_tipo:
+    st.session_state.tipo_filter = st.selectbox(
+        "Filtrar por Tipo:", tipos,
+        index=tipos.index(st.session_state.tipo_filter) if st.session_state.tipo_filter in tipos else 0,
+        key='tipo_filter'
+    )
+
+# Aplica os filtros
+filtered_df = PRODUCTS_DF.copy()
+if st.session_state.marca_filter != 'TODAS':
+    filtered_df = filtered_df[filtered_df['marca'] == st.session_state.marca_filter]
+if st.session_state.tipo_filter != 'TODAS':
+    filtered_df = filtered_df[filtered_df['tipo'] == st.session_state.tipo_filter]
+
+# Cria as opções formatadas para o selectbox
+product_options = {row['codigo']: f"[{row['codigo']}] {row['produto']}" 
+                   for index, row in filtered_df.iterrows()}
+
+if not product_options:
+    st.error("Nenhum produto encontrado com os filtros selecionados.")
+    st.stop()
+    
+# Garante que o produto selecionado exista
+if st.session_state.selected_product_code not in product_options:
+    st.session_state.selected_product_code = filtered_df.iloc[0]['codigo']
+
+st.session_state.selected_product_code = st.selectbox(
+    "Selecione o Produto (Busca por Código/Nome):",
+    options=list(product_options.keys()),
+    format_func=lambda x: product_options[x],
+    key='product_code_selector'
 )
 
-# Extrai o código do produto selecionado
-codigo_selecionado = produto_selecionado_str.split(']')[0].replace('[', '')
-info = produtos_df[produtos_df["codigo"] == codigo_selecionado].iloc[0]
+# Pega as informações logísticas
+current_product_info = PRODUCTS_DF[PRODUCTS_DF['codigo'] == st.session_state.selected_product_code]
+if not current_product_info.empty:
+    info = current_product_info.iloc[0]
+    
+    col_img, col_info = st.columns([1, 2])
+    with col_img:
+        st.image("https://placehold.co/150x150/F0F2F6/262730?text=IMAGEM", caption=info['produto'], width=150)
 
-# --- Informações do produto e Visualização ---
-col_img, col_info, col_vazio = st.columns([1, 1, 2])
-with col_img:
-    # Usando um placeholder estático (você pode substituir por uma URL real se tiver)
-    st.image(
-        "https://placehold.co/400x300/F0F2F6/262730?text=SEM+IMAGEM",
-        caption=f"Produto: {info['produto']}",
-        width=200
-    )
+    with col_info:
+        st.markdown("#### Características Logísticas")
+        st.markdown(f"**📦 Qtd por caixa:** `{info['quantidade_por_caixa']}`")
+        st.markdown(f"**🧱 Qtd por camada:** `{info['quantidade_por_camada']}`")
+        st.markdown(f"**🏗️ Qtd por palete (Caixas):** `{info['quantidade_por_pallet']}`")
+else:
+    st.error("Produto não encontrado!")
+    st.stop()
 
-with col_info:
-    st.markdown("#### Logística")
-    st.markdown(f"**Código:** `{info['codigo']}`")
-    st.markdown(f"**Caixa (UN):** `{info['quantidade_por_caixa']}`")
-    st.markdown(f"**Camada (CX):** `{info['quantidade_por_camada']}`")
-    st.markdown(f"**Palete (CX):** `{info['quantidade_por_pallet']}`")
 
 st.markdown("---")
 
-# 3. ENTRADA DE DADOS E AÇÃO (FLOW RÁPIDO)
+# --- 4. ENTRADA DE QUANTIDADE E AÇÃO ---
 
-# Usa st.form para agrupar entradas e garantir que o cálculo seja feito apenas
-# na submissão, mantendo a interface mais responsiva.
-with st.form("form_contagem", clear_on_submit=False):
-    st.markdown("### 4. 🔢 Contagem")
-    
-    # Prioriza Pallets, que é o mais rápido no contexto de laticínios/drives
-    tipo_contagem = st.radio(
-        "Como deseja informar a quantidade?",
-        ("Pallets", "Caixas", "Unidades"),
-        index=0, # Pallets como default para celeridade
-        horizontal=True
-    )
+st.subheader("🔢 Contagem e Ação")
 
-    qtd = st.number_input(
-        f"Quantidade de **{tipo_contagem}** informada:",
-        min_value=0,
-        step=1,
-        value=0,
-        key=f'qtd_input_{tipo_contagem}' # Chave única para evitar conflitos
-    )
+st.session_state.tipo_contagem = st.radio(
+    "Tipo de Contagem:",
+    ("Pallets", "Caixas", "Unidades"),
+    index=["Pallets", "Caixas", "Unidades"].index(st.session_state.tipo_contagem),
+    horizontal=True,
+    key='tipo_contagem'
+)
 
-    quantidade_caixas = 0
-    quantidade_total = 0
+st.session_state.qtd_input = st.number_input(
+    f"Quantidade de **{st.session_state.tipo_contagem}** informada:",
+    min_value=0,
+    step=1,
+    value=st.session_state.qtd_input,
+    key='qtd_input'
+)
 
-    if tipo_contagem == "Pallets":
-        quantidade_caixas = qtd * info["quantidade_por_pallet"]
-    elif tipo_contagem == "Caixas":
-        quantidade_caixas = qtd
-    else: # Unidades
-        # Se for unidades, o cálculo é apenas a quantidade informada
-        quantidade_total = qtd
+total_calculado = calculate_total_units(st.session_state.qtd_input, current_product_info, st.session_state.tipo_contagem)
 
-    if quantidade_caixas > 0:
-        # Calcula a quantidade total de unidades APENAS se for Pallets ou Caixas
-        quantidade_total = quantidade_caixas * info["quantidade_por_caixa"]
-    
-    # Exibe o total calculado em unidades em tempo real
-    st.info(f"**TOTAL CALCULADO:** `{int(quantidade_total):,}` unidades", icon="✔️")
+st.success(f"**TOTAL CALCULADO:** `{total_calculado:,.0f}` unidades", icon="✔️")
 
-    # Botão de submissão do formulário
-    btn_adicionar = st.form_submit_button("✅ Adicionar/Atualizar Contagem (ENTER)")
-    
-    # Adicionando um atalho de teclado simulado (Streamlit não suporta atalhos nativos
-    # sem JS customizado, mas a tecla ENTER geralmente submete o formulário por padrão.)
-    st.markdown("_Pressione ENTER para adicionar rapidamente._")
 
-    # --- Lógica de Adição/Atualização ---
-    if btn_adicionar:
-        if not barracao or not rua:
-            st.error("⚠️ Erro: Selecione o **Barracão** e a **Rua**.")
-        elif qtd <= 0:
-            st.warning("⚠️ Atenção: Informe uma quantidade válida (maior que zero).")
-        else:
-            novo_registro = {
-                "barracao": barracao,
-                "rua": rua,
-                "codigo": codigo_selecionado,
-                "produto": info["produto"],
-                "tipo_contagem": tipo_contagem,
-                "quantidade_informada": qtd,
-                "quantidade_total_unidades": int(quantidade_total),
-                "timestamp": pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
-            }
-            
-            # Chaves para checar unicidade (Local + Produto)
-            keys = (barracao, rua, codigo_selecionado)
-            
-            # Verifica se a contagem para este (Local + Produto) já existe
-            exists = st.session_state.contagens[
-                (st.session_state.contagens["barracao"] == barracao) &
-                (st.session_state.contagens["rua"] == rua) &
-                (st.session_state.contagens["codigo"] == codigo_selecionado)
-            ]
-
-            if not exists.empty:
-                # Se existe, atualiza a linha
-                index_to_update = exists.index[0]
-                for key, value in novo_registro.items():
-                    st.session_state.contagens.at[index_to_update, key] = value
-                st.success(f"🔄 Contagem **atualizada** para B:{barracao}, R:{rua}, Prod:{info['codigo']}.")
-            else:
-                # Se não existe, adiciona a nova linha
-                st.session_state.contagens = pd.concat([st.session_state.contagens, pd.DataFrame([novo_registro])], ignore_index=True)
-                st.success(f"➕ Contagem **adicionada** para B:{barracao}, R:{rua}, Prod:{info['codigo']}.")
-            
-            # Salva o estado atual automaticamente após a alteração
-            salvar_contagens(st.session_state.contagens)
-            
-            # Limpa apenas a quantidade informada para o próximo produto na mesma rua
-            st.session_state[f'qtd_input_{tipo_contagem}'] = 0
-            
-            # Não limpa a seleção da rua para permitir a contagem sequencial
+# Botão de Ação
+st.button(
+    "✅ Adicionar/Atualizar Contagem (ENTER)",
+    on_click=lambda: handle_submit_count(current_product_info, total_calculado),
+    use_container_width=True,
+    type="primary",
+    disabled=st.session_state.qtd_input <= 0
+)
 
 st.markdown("---")
 
-# 4. VISUALIZAÇÃO E EXPORTAÇÃO
-if not st.session_state.contagens.empty:
-    st.markdown("### 📝 Contagens Ativas (Autosalvas em `contagens_ativas.csv`)")
-    
-    # Filtro opcional
-    barracao_filtro = st.selectbox(
-        "Filtrar por Barracão para visualização:",
-        ["TODOS"] + barracoes,
-        index=0
-    )
+# --- 5. VISUALIZAÇÃO E EXPORTAÇÃO ---
 
-    df_display = st.session_state.contagens
-    if barracao_filtro != "TODOS":
-        df_display = df_display[df_display["barracao"] == barracao_filtro]
+st.subheader("📝 Contagens Registradas na Ficha Atual")
 
-    # Ordena para melhor visualização
-    df_display = df_display.sort_values(by=["barracao", "rua"])
+if current_sheet['counts']:
+    counts_df = pd.DataFrame(current_sheet['counts'])
+    counts_df['drive'] = counts_df['drive'].astype(int)
     
-    # Exibe a tabela editável
-    st.data_editor(
-        df_display,
-        num_rows="dynamic",
+    # Ordena a tabela por Rua e Drive para melhor visualização
+    counts_df = counts_df.sort_values(by=['barracao', 'rua', 'drive'])
+    
+    # Colunas para exibir
+    display_cols = [
+        "barracao", "rua", "drive", "codigo", "produto", 
+        "tipo_contagem", "quantidade_informada", "quantidade_total_unidades"
+    ]
+    
+    st.dataframe(
+        counts_df[display_cols],
+        column_config={
+            "barracao": "Barracão",
+            "rua": "Rua",
+            "drive": "Drive",
+            "codigo": "Cód.",
+            "produto": "Produto",
+            "tipo_contagem": "Tipo Qtd",
+            "quantidade_informada": "Qtd. Informada",
+            "quantidade_total_unidades": st.column_config.NumberColumn(
+                "Total Unidades", format="%d"
+            ),
+        },
         use_container_width=True,
-        # Define as colunas que podem ser editadas (exceto as chaves)
-        column_editable_state={
-            "barracao": False, "rua": False, "codigo": False, "produto": False, "timestamp": False,
-        }
+        hide_index=True
     )
 
-    # Botão de exportação
+    # Função para exportar CSV (usando o DataFrame já processado)
     @st.cache_data
     def convert_df_to_csv(df):
         return df.to_csv(index=False, sep=';').encode('utf-8')
 
-    csv_export = convert_df_to_csv(st.session_state.contagens)
+    csv_export = convert_df_to_csv(counts_df)
 
     st.download_button(
-        label="💾 Exportar Todas Contagens (.csv)",
+        label="💾 Exportar Ficha Atual (.csv)",
         data=csv_export,
-        file_name=f'contagens_estoque_export_{pd.Timestamp.now().strftime("%Y%m%d_%H%M")}.csv',
+        file_name=f'ficha_estoque_{current_sheet["name"].replace(" ", "_")}.csv',
         mime='text/csv',
-        type="primary"
+        type="secondary"
     )
 
+else:
+    st.info("Nenhuma contagem registrada nesta ficha ainda.")
+
 st.markdown("---")
-st.markdown(f"💾 **Caminho de Autosave:** `{CONTAGENS_CSV}`")
+st.caption(f"Dados persistidos em: `{INVENTORY_DB_FILE}`. Salve este arquivo para manter suas fichas!")
