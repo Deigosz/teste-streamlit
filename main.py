@@ -7,13 +7,15 @@ import time
 # --- Configuração Inicial e Constantes ---
 st.set_page_config(layout="wide", page_title="Stock Fast Laticínio")
 
+# Define o caminho para salvar o "banco de dados" local
+# NOTA: Em deploy na nuvem, você precisará garantir que este caminho seja persistente.
 BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_PATH, "db")
 INVENTORY_DB_FILE = os.path.join(DB_PATH, "inventory_db.json")
 
 # Garante que a pasta 'db' exista
 if not os.path.exists(DB_PATH):
-    os.makedirs(DB_PATH)
+    os.makedirs(DB_PATH, exist_ok=True)
 
 # --- MOCK DE DADOS DE PRODUTOS (Simulando dbItens.csv com Marca e Tipo) ---
 MOCK_PRODUCTS = [
@@ -54,7 +56,8 @@ if 'db_data' not in st.session_state:
     if not st.session_state.db_data["sheets"]:
         st.session_state.selected_sheet_id = None
     else:
-        st.session_state.selected_sheet_id = st.session_state.db_data["sheets"][-1]["id"] # Pega a última ficha
+        # Pega a última ficha
+        st.session_state.selected_sheet_id = st.session_state.db_data["sheets"][-1]["id"] 
 
     # Estado da interface
     st.session_state.barracao = 'A'
@@ -65,7 +68,8 @@ if 'db_data' not in st.session_state:
     st.session_state.tipo_contagem = 'Pallets'
     st.session_state.marca_filter = 'TODAS'
     st.session_state.tipo_filter = 'TODAS'
-    st.session_state.selected_product_code = PRODUCTS_DF.iloc[0]['codigo']
+    # Garante que o produto selecionado inicial exista
+    st.session_state.selected_product_code = PRODUCTS_DF.iloc[0]['codigo'] if not PRODUCTS_DF.empty else None
 
 # --- Funções de Lógica ---
 
@@ -112,6 +116,7 @@ def calculate_total_units(quantity, product_info, type_contagem):
     product = product_info.iloc[0]
     
     if type_contagem == 'Pallets':
+        # Multiplica qtd informada * qtd por pallet * qtd por caixa (ex: 1 pallet * 90 caixas * 12 un/cx)
         return int(quantity * product['quantidade_por_pallet'] * product['quantidade_por_caixa'])
     elif type_contagem == 'Caixas':
         return int(quantity * product['quantidade_por_caixa'])
@@ -143,6 +148,7 @@ def handle_submit_count(product_info, total_calculado):
     counts_updated = 0
 
     for drive in drives:
+        # ID composto para garantir que o mesmo produto/local atualize
         count_id = f"{barracao}_{rua}_{drive}_{product_code}"
         
         new_count = {
@@ -190,10 +196,13 @@ def handle_submit_count(product_info, total_calculado):
                 st.session_state.rua = ruas_list[current_index + 1]
                 st.session_state.drive_inicial = 1
                 st.session_state.drive_final = 1
-                st.success(f"✅ Contagem(ns) registrada(s)! Avançando para Rua {st.session_state.rua}.")
+                st.toast(f"✅ Avançando para Rua {st.session_state.rua}!", icon='🚚')
             else:
                 st.session_state.rua = '01'
                 st.warning("⚠️ Fim das Ruas! Voltando para '01'. Sugerimos mudar o Barracão.")
+        
+        # Força o re-render para atualizar os selectboxes
+        st.rerun()
 
 # --- UI PRINCIPAL ---
 
@@ -202,8 +211,7 @@ st.markdown("---")
 
 current_sheet = get_current_sheet()
 if not current_sheet:
-    st.warning("⚠️ Nenhuma ficha de contagem selecionada ou criada.")
-    st.stop()
+    st.stop() # Já exibe mensagem de alerta acima se não houver ficha
 
 
 # --- 1. SELEÇÃO E GERENCIAMENTO DE FICHA ---
@@ -213,12 +221,13 @@ col_sheet, col_new = st.columns([3, 1])
 sheet_options = {s["id"]: s["name"] for s in st.session_state.db_data["sheets"]}
 
 with col_sheet:
-    st.session_state.selected_sheet_id = st.selectbox(
+    # CORRIGIDO: Removida a atribuição direta, usando o key para gerenciar o valor
+    st.selectbox(
         "Selecione a Ficha de Contagem:",
         options=list(sheet_options.keys()),
         format_func=lambda x: sheet_options[x],
         index=list(sheet_options.keys()).index(st.session_state.selected_sheet_id) if st.session_state.selected_sheet_id in sheet_options else 0,
-        key='sheet_selector'
+        key='selected_sheet_id' # O Streamlit gerencia st.session_state.selected_sheet_id
     )
 with col_new:
     st.button("➕ Nova Ficha", on_click=create_sheet, use_container_width=True)
@@ -231,7 +240,8 @@ st.subheader("🗺️ Localização e Drives")
 col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
 with col1:
-    st.session_state.barracao = st.selectbox(
+    # CORRIGIDO: Removida a atribuição direta
+    st.selectbox(
         "🏢 Barracão:", ["A", "B", "C", "D", "E", "F", "G"],
         index=["A", "B", "C", "D", "E", "F", "G"].index(st.session_state.barracao),
         key='barracao'
@@ -239,21 +249,29 @@ with col1:
 
 with col2:
     ruas = [f"{i:02d}" for i in range(1, 31)]
-    st.session_state.rua = st.selectbox(
+    # CORRIGIDO: Removida a atribuição direta
+    st.selectbox(
         "🛣️ Rua:", ruas,
         index=ruas.index(st.session_state.rua),
         key='rua'
     )
 
 with col3:
-    st.session_state.drive_inicial = st.number_input(
+    # CORRIGIDO: Removida a atribuição direta
+    st.number_input(
         "Drive Inicial:", min_value=1, step=1, value=st.session_state.drive_inicial, key='drive_inicial'
     )
 
 with col4:
-    st.session_state.drive_final = st.number_input(
+    # CORRIGIDO: Removida a atribuição direta
+    # Garante que o drive final não seja menor que o inicial
+    st.number_input(
         "Drive Final:", min_value=st.session_state.drive_inicial, step=1, value=st.session_state.drive_final, key='drive_final'
     )
+    # Correção de contingência para garantir drive_final >= drive_inicial
+    if st.session_state.drive_final < st.session_state.drive_inicial:
+        st.session_state.drive_final = st.session_state.drive_inicial
+
 
 drives_count = st.session_state.drive_final - st.session_state.drive_inicial + 1
 st.info(f"📍 **Local Atual:** Barracão **{st.session_state.barracao}**, Rua **{st.session_state.rua}**. Contando **{drives_count} drive(s)**.")
@@ -274,14 +292,16 @@ marcas = ['TODAS'] + sorted(PRODUCTS_DF['marca'].unique().tolist())
 tipos = ['TODOS'] + sorted(PRODUCTS_DF['tipo'].unique().tolist())
 
 with col_marca:
-    st.session_state.marca_filter = st.selectbox(
+    # CORRIGIDO: Removida a atribuição direta
+    st.selectbox(
         "Filtrar por Marca:", marcas,
         index=marcas.index(st.session_state.marca_filter) if st.session_state.marca_filter in marcas else 0,
         key='marca_filter'
     )
     
 with col_tipo:
-    st.session_state.tipo_filter = st.selectbox(
+    # CORRIGIDO: Removida a atribuição direta
+    st.selectbox(
         "Filtrar por Tipo:", tipos,
         index=tipos.index(st.session_state.tipo_filter) if st.session_state.tipo_filter in tipos else 0,
         key='tipo_filter'
@@ -291,7 +311,7 @@ with col_tipo:
 filtered_df = PRODUCTS_DF.copy()
 if st.session_state.marca_filter != 'TODAS':
     filtered_df = filtered_df[filtered_df['marca'] == st.session_state.marca_filter]
-if st.session_state.tipo_filter != 'TODAS':
+if st.session_state.tipo_filter != 'TODOS':
     filtered_df = filtered_df[filtered_df['tipo'] == st.session_state.tipo_filter]
 
 # Cria as opções formatadas para o selectbox
@@ -306,11 +326,12 @@ if not product_options:
 if st.session_state.selected_product_code not in product_options:
     st.session_state.selected_product_code = filtered_df.iloc[0]['codigo']
 
-st.session_state.selected_product_code = st.selectbox(
+# CORRIGIDO: Removida a atribuição direta
+st.selectbox(
     "Selecione o Produto (Busca por Código/Nome):",
     options=list(product_options.keys()),
     format_func=lambda x: product_options[x],
-    key='product_code_selector'
+    key='selected_product_code'
 )
 
 # Pega as informações logísticas
@@ -320,7 +341,8 @@ if not current_product_info.empty:
     
     col_img, col_info = st.columns([1, 2])
     with col_img:
-        st.image("https://placehold.co/150x150/F0F2F6/262730?text=IMAGEM", caption=info['produto'], width=150)
+        # Placeholder de imagem
+        st.image("https://placehold.co/150x150/F0F2F6/262730?text=IMAGEM", caption=info['produto'], width=150) 
 
     with col_info:
         st.markdown("#### Características Logísticas")
@@ -338,7 +360,8 @@ st.markdown("---")
 
 st.subheader("🔢 Contagem e Ação")
 
-st.session_state.tipo_contagem = st.radio(
+# CORRIGIDO: Removida a atribuição direta
+st.radio(
     "Tipo de Contagem:",
     ("Pallets", "Caixas", "Unidades"),
     index=["Pallets", "Caixas", "Unidades"].index(st.session_state.tipo_contagem),
@@ -346,7 +369,8 @@ st.session_state.tipo_contagem = st.radio(
     key='tipo_contagem'
 )
 
-st.session_state.qtd_input = st.number_input(
+# CORRIGIDO: Removida a atribuição direta
+st.number_input(
     f"Quantidade de **{st.session_state.tipo_contagem}** informada:",
     min_value=0,
     step=1,
@@ -378,7 +402,7 @@ if current_sheet['counts']:
     counts_df = pd.DataFrame(current_sheet['counts'])
     counts_df['drive'] = counts_df['drive'].astype(int)
     
-    # Ordena a tabela por Rua e Drive para melhor visualização
+    # Ordena a tabela por Barracão, Rua e Drive para melhor visualização
     counts_df = counts_df.sort_values(by=['barracao', 'rua', 'drive'])
     
     # Colunas para exibir
@@ -396,11 +420,12 @@ if current_sheet['counts']:
             "codigo": "Cód.",
             "produto": "Produto",
             "tipo_contagem": "Tipo Qtd",
-            "quantidade_informada": "Qtd. Informada",
+            "quantidade_informada": "Qtd. Info",
             "quantidade_total_unidades": st.column_config.NumberColumn(
                 "Total Unidades", format="%d"
             ),
         },
+        height=300,
         use_container_width=True,
         hide_index=True
     )
