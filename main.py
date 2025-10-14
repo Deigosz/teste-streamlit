@@ -17,7 +17,7 @@ def get_image_path(path):
 
 # --- Simulação de banco de dados de produtos ---
 
-caminho_csv = os.path.join(base_path, "db", "dbitens.csv")
+caminho_csv = os.path.join(base_path, "db", "dbItens.csv")
 
 
 if os.path.exists(caminho_csv):
