@@ -204,8 +204,18 @@ def selecao_de_item():
         
         col_img, col_dados = st.columns([1, 2])
         with col_img:
-            imagem_url_simulada = r"C:\Users\diego.souza\Documents\Github\teste-streamlit\imagens\leite.png"
-            st.image(imagem_url_simulada, caption=f"Cód. Imagem: {item_selecionado['codigo_amarracao_imagem']}")
+            caminho_imagem_relativo = "imagens/leite.png"
+            try:
+                # Tenta exibir a imagem usando o caminho relativo
+                st.image(
+                    caminho_imagem_relativo, 
+                    caption=f"Cód. Imagem: {item_selecionado['codigo_amarracao_imagem']}"
+                )
+            except FileNotFoundError:
+                st.error(f"Imagem não encontrada! Verifique se '{caminho_imagem_relativo}' existe.")
+            except Exception as e:
+                # Outros erros de media file storage
+                st.warning(f"Erro ao exibir a imagem. Detalhes: {e}")
 
         with col_dados:
             st.metric("SKU Completo", item_selecionado['codigo'])
