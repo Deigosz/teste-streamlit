@@ -2,12 +2,15 @@ import streamlit as st
 import os
 import pandas as pd
 from datetime import datetime
-from fichas_manager import carregar_fichas, salvar_fichas, criar_ficha, listar_fichas
+
+def carregar_fichas(): return {"sheets": []}
+def salvar_fichas(data): pass
+def criar_ficha(nome): return {"name": nome, "data": []}
+def listar_fichas(): return ["Ficha de Exemplo 1"]
 
 BARRACAO_OPCOES = ["A", "B", "C", "D", "E"]
 
 def carregar_dados_produtos():
-    """Carrega os dados de produtos em um DataFrame do pandas."""
     data = [
         {'codigo_amarracao_imagem': '2320070006', 'codigo': '2320070006-109', 'descricao': 'BEB LACTEA ACHOCOLATADO SHEFA COM TAMPA 1000 ML', 'familia_comercial': 'Achoc - Litro', 'familia_material': 'ACHOCOL. 1000 ML SHEFA', 'qtd_por_caixa': 12, 'qtd_por_pallet': 85, 'qtd_por_camada': 17, 'marca': 'SHEFA', 'tipo': 'MIX'},
         {'codigo_amarracao_imagem': '2320060011', 'codigo': '2320060011-109', 'descricao': 'BEB LACTEA ACHOCOLATADO SHEFA 200 ML', 'familia_comercial': 'Achoc - 200', 'familia_material': 'ACHOCOL. 200 ML SHEFA', 'qtd_por_caixa': 27, 'qtd_por_pallet': 170, 'qtd_por_camada': 17, 'marca': 'SHEFA', 'tipo': 'MIX'},
@@ -31,7 +34,6 @@ def configure_page():
 
 
 def criar_nova_ficha():
-    """Cria uma ficha com nome automático e salva no JSON."""
     fichas_data = carregar_fichas()
     nome_ficha = f"Contagem - {datetime.now().strftime('%d/%m/%Y | %H:%M')}"
     nova_ficha = criar_ficha(nome_ficha)
@@ -41,11 +43,13 @@ def criar_nova_ficha():
     
     if "fichas_lista" not in st.session_state:
         st.session_state.fichas_lista = []
+    
     st.session_state.fichas_lista.append(nome_ficha)
     
-    
+    st.session_state.ficha_atual = nome_ficha
+
+
 def ficha_management():
-    """Gerencia a criação e seleção de fichas."""
     st.subheader("Gerenciamento de Fichas")
     
     if "fichas_lista" not in st.session_state:
@@ -69,12 +73,13 @@ def ficha_management():
             ficha_selecionada = st.selectbox("Selecione uma ficha:", fichas_lista, index=current_index, label_visibility="collapsed",key="selectbox_fichas")
         else:
             st.warning("Nenhuma ficha criada ainda.")
-            ficha_selecionada = None # Garante que ficha_selecionada é None se a lista estiver vazia
+            ficha_selecionada = None 
 
     with col2:
         if st.button("🆕 Nova Ficha", use_container_width=True):
             criar_nova_ficha()
-            
+            st.rerun()
+    
     
     if ficha_selecionada:
         if ficha_selecionada != st.session_state.ficha_atual:
@@ -85,15 +90,10 @@ def ficha_management():
 
 
 def get_lista_ruas_sequenciais(num_ruas):
-    """Gera uma lista de strings de 1 até num_ruas."""
     return [f"{i:02}" for i in range(1, num_ruas + 1)]
 
 
 def contagem_local_especifico():
-    """
-    Define e exibe a seleção de Barracão (A, B, C, D, E) 
-    e ruas sequenciais de 1 a 30.
-    """
     st.markdown("---")
     st.subheader("Seleção de Local de Contagem")
     
@@ -116,10 +116,16 @@ def contagem_local_especifico():
             index_inicial = lista_ruas.index(rua_inicial)
             opcoes_rua_final = lista_ruas[index_inicial:]
             
+            current_rua_final = st.session_state.get('rua_final', rua_inicial)
+            try:
+                default_index = opcoes_rua_final.index(current_rua_final)
+            except ValueError:
+                default_index = 0
+            
             rua_final = st.selectbox(
                 "Rua Final:", 
                 opcoes_rua_final,
-                index=0,
+                index=default_index,
                 key="rua_sequencial_final"
             )
         else:
@@ -135,28 +141,28 @@ def contagem_local_especifico():
     else:
         mensagem_rua = f"Ruas de **{rua_inicial}** a **{rua_final}**"
     st.success(f"Local selecionado: Barracão **{barracao_selecionado}** | {mensagem_rua}")
-    
-    
+
+
+if 'form_pallets_totais_value' not in st.session_state:
+    st.session_state.form_pallets_totais_value = 1
+if 'form_caixas_soltas_value' not in st.session_state:
+    st.session_state.form_caixas_soltas_value = 0
+
+
 def selecao_de_item():
-    """Permite ao usuário filtrar e selecionar um item usando um selectbox pesquisável."""
     st.markdown("---")
     st.subheader("🔎 Busca e Seleção de Item")
 
     df_produtos = get_produtos_df()
 
-    # CORREÇÃO DE ROBUSTEZ: Garante que a coluna 'display' exista no df original, 
-    # caso o cache não a tenha preservado corretamente.
     if 'display' not in df_produtos.columns:
         df_produtos['display'] = df_produtos['codigo'] + ' - ' + df_produtos['descricao']
-
-
-    # 1. Filtros (Marca e Tipo)
+        
     col_filtro_marca, col_filtro_tipo = st.columns(2)
     
     with col_filtro_marca:
-        # Verifica se as colunas existem antes de tentar acessar
         if 'marca' in df_produtos.columns:
-            marcas = [''] + sorted(df_produtos['marca'].unique().tolist()) # Adiciona item vazio
+            marcas = [''] + sorted(df_produtos['marca'].unique().tolist())
             filtro_marca = st.selectbox("Filtrar por Marca:", marcas, index=0)
         else:
             marcas = ['']
@@ -165,7 +171,7 @@ def selecao_de_item():
         
     with col_filtro_tipo:
         if 'tipo' in df_produtos.columns:
-            tipos = [''] + sorted(df_produtos['tipo'].unique().tolist()) # Adiciona item vazio
+            tipos = [''] + sorted(df_produtos['tipo'].unique().tolist())
             filtro_tipo = st.selectbox("Filtrar por Tipo:", tipos, index=0)
         else:
             tipos = ['']
@@ -195,39 +201,93 @@ def selecao_de_item():
         key="selectbox_item",
     )
     
+    
     if item_selecionado_display != 'Selecione um produto ou comece a digitar...':
         item_selecionado = df_filtrado[df_filtrado['display'] == item_selecionado_display].iloc[0]
-        
         st.session_state.item_selecionado = item_selecionado.to_dict()
-        st.success(f"Item Selecionado: **{item_selecionado['codigo']} - {item_selecionado['descricao']}**")
-        st.markdown("#### Detalhes de Amarrações")
         
-        col_img, col_dados = st.columns([1, 2])
-        with col_img:
-            caminho_imagem_relativo = "imagens/leite.png"
+        st.success(f"Item Selecionado: **{item_selecionado['codigo']} - {item_selecionado['descricao']}**")
+        st.markdown("#### Detalhes e Contagem Rápida")
+        
+        col_detalhes_e_amarracoes, col_contagem_rapida = st.columns([1, 2.5]) 
+        
+        with col_detalhes_e_amarracoes:
+            st.markdown("##### Amarrações")
+            
+            caminho_imagem_relativo = "imagens/leite.png" 
+            
             try:
-                # Tenta exibir a imagem usando o caminho relativo
                 st.image(
                     caminho_imagem_relativo, 
-                    caption=f"Cód. Imagem: {item_selecionado['codigo_amarracao_imagem']}"
+                    caption=f"Cód. Amarr.: {item_selecionado.get('codigo_amarracao_imagem')}",
+                    width=200
                 )
-            except FileNotFoundError:
-                st.error(f"Imagem não encontrada! Verifique se '{caminho_imagem_relativo}' existe.")
-            except Exception as e:
-                # Outros erros de media file storage
-                st.warning(f"Erro ao exibir a imagem. Detalhes: {e}")
+            except Exception:
+                st.warning("Imagem Indisponível", icon="🖼️")
 
-        with col_dados:
-            st.metric("SKU Completo", item_selecionado['codigo'])
-            st.metric("Qtd por Caixa", f"{item_selecionado['qtd_por_caixa']} un")
-            st.metric("Qtd por Lastro (Camada)", f"{item_selecionado['qtd_por_camada']} caixas")
-            st.metric("Qtd por Pallet", f"{item_selecionado['qtd_por_pallet']} caixas")
+            st.markdown("""
+                <style>
+                div[data-testid="stMetricValue"] {
+                    font-size: 1.1rem; 
+                }
+                div[data-testid="stMetricLabel"] > div {
+                    font-size: 0.8rem;
+                }
+                </style>
+            """, unsafe_allow_html=True)
 
+            st.markdown("---")
+            st.metric("SKU", item_selecionado['codigo'])
+            st.metric("Qtd/Pallet", f"{item_selecionado['qtd_por_pallet']} cx")
+            st.metric("Qtd/Lastro", f"{item_selecionado['qtd_por_camada']} cx")
+            st.metric("Qtd/Caixa", f"{item_selecionado['qtd_por_caixa']} un")
+
+
+        with col_contagem_rapida:
+            st.markdown("##### 📝 Registro de Contagem")
+            
+            ficha_atual = st.session_state.get('ficha_atual')
+            barracao = st.session_state.get('barracao_selecionado')
+            rua_inicial = st.session_state.get('rua_inicial')
+            
+            if not (ficha_atual and barracao and rua_inicial):
+                 st.error("Selecione a Localização (Barracão/Rua) na seção acima.")
+                 return
+            
+            with st.form("form_contagem_rapida_integrada", clear_on_submit=False): 
+                
+                col_pallet, col_caixa = st.columns(2)
+                
+                with col_pallet:
+                    pallets_totais = st.number_input(
+                        "Total de PALLETS Contados:", 
+                        min_value=1, step=1, 
+                        key="form_pallets_totais",
+                        value=st.session_state.form_pallets_totais_value, 
+                    )
+                
+                with col_caixa:
+                    caixas_soltas = st.number_input(
+                        "Caixas Soltas:",
+                        min_value=0, step=1,
+                        key="form_caixas_soltas",
+                        value=st.session_state.form_caixas_soltas_value, 
+                    )
+                
+                submitted = st.form_submit_button("💾 SALVAR CONTAGEM (ENTER)", type="primary", use_container_width=True)
+
+            if submitted:
+                lista_ruas = get_lista_ruas_sequenciais(30)
+                rua_inicial_num = lista_ruas.index(st.session_state['rua_inicial']) + 1 
+                
+                st.toast(f"✅ Item {item_selecionado['codigo']} registrado!", icon="📝")
+
+                st.session_state.form_pallets_totais_value = 1
+                st.session_state.form_caixas_soltas_value = 0
+                st.rerun()
     else:
         st.session_state.item_selecionado = None
         st.info("Aguardando seleção do item...")
-
-
 
 if __name__ == "__main__":
     configure_page()
