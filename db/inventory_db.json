@@ -1,0 +1,131 @@
+{
+    "sheets": [
+        {
+            "id": "sheet_1760469075",
+            "name": "Ficha 2025-10-14 16:11",
+            "createdAt": 1760469075.5194705,
+            "counts": [
+                {
+                    "id": "A_01_1_200100018-141",
+                    "barracao": "A",
+                    "rua": "01",
+                    "drive": 1,
+                    "codigo": "200100018-141",
+                    "produto": "LEITE UHT INTEGRAL 1 L LIDER",
+                    "tipo_contagem": "Pallets",
+                    "quantidade_informada": 28,
+                    "quantidade_total_unidades": 30240,
+                    "timestamp": 1760469646.8434114
+                },
+                {
+                    "id": "A_02_2_200100008-141",
+                    "barracao": "A",
+                    "rua": "02",
+                    "drive": 2,
+                    "codigo": "200100008-141",
+                    "produto": "LEITE UHT DESNATADO 1 L LIDER",
+                    "tipo_contagem": "Pallets",
+                    "quantidade_informada": 13,
+                    "quantidade_total_unidades": 14040,
+                    "timestamp": 1760469724.190506
+                },
+                {
+                    "id": "A_02_3_200100008-141",
+                    "barracao": "A",
+                    "rua": "02",
+                    "drive": 3,
+                    "codigo": "200100008-141",
+                    "produto": "LEITE UHT DESNATADO 1 L LIDER",
+                    "tipo_contagem": "Pallets",
+                    "quantidade_informada": 13,
+                    "quantidade_total_unidades": 14040,
+                    "timestamp": 1760469724.190506
+                },
+                {
+                    "id": "A_02_4_200100008-141",
+                    "barracao": "A",
+                    "rua": "02",
+                    "drive": 4,
+                    "codigo": "200100008-141",
+                    "produto": "LEITE UHT DESNATADO 1 L LIDER",
+                    "tipo_contagem": "Pallets",
+                    "quantidade_informada": 13,
+                    "quantidade_total_unidades": 14040,
+                    "timestamp": 1760469724.190506
+                },
+                {
+                    "id": "A_02_5_200100008-141",
+                    "barracao": "A",
+                    "rua": "02",
+                    "drive": 5,
+                    "codigo": "200100008-141",
+                    "produto": "LEITE UHT DESNATADO 1 L LIDER",
+                    "tipo_contagem": "Pallets",
+                    "quantidade_informada": 13,
+                    "quantidade_total_unidades": 14040,
+                    "timestamp": 1760469724.190506
+                },
+                {
+                    "id": "A_02_6_200100008-141",
+                    "barracao": "A",
+                    "rua": "02",
+                    "drive": 6,
+                    "codigo": "200100008-141",
+                    "produto": "LEITE UHT DESNATADO 1 L LIDER",
+                    "tipo_contagem": "Pallets",
+                    "quantidade_informada": 13,
+                    "quantidade_total_unidades": 14040,
+                    "timestamp": 1760469724.190506
+                },
+                {
+                    "id": "A_02_7_200100008-141",
+                    "barracao": "A",
+                    "rua": "02",
+                    "drive": 7,
+                    "codigo": "200100008-141",
+                    "produto": "LEITE UHT DESNATADO 1 L LIDER",
+                    "tipo_contagem": "Pallets",
+                    "quantidade_informada": 13,
+                    "quantidade_total_unidades": 14040,
+                    "timestamp": 1760469724.190506
+                },
+                {
+                    "id": "A_02_8_200100008-141",
+                    "barracao": "A",
+                    "rua": "02",
+                    "drive": 8,
+                    "codigo": "200100008-141",
+                    "produto": "LEITE UHT DESNATADO 1 L LIDER",
+                    "tipo_contagem": "Pallets",
+                    "quantidade_informada": 13,
+                    "quantidade_total_unidades": 14040,
+                    "timestamp": 1760469724.190506
+                },
+                {
+                    "id": "A_02_9_200100008-141",
+                    "barracao": "A",
+                    "rua": "02",
+                    "drive": 9,
+                    "codigo": "200100008-141",
+                    "produto": "LEITE UHT DESNATADO 1 L LIDER",
+                    "tipo_contagem": "Pallets",
+                    "quantidade_informada": 13,
+                    "quantidade_total_unidades": 14040,
+                    "timestamp": 1760469724.190506
+                },
+                {
+                    "id": "A_02_10_200100008-141",
+                    "barracao": "A",
+                    "rua": "02",
+                    "drive": 10,
+                    "codigo": "200100008-141",
+                    "produto": "LEITE UHT DESNATADO 1 L LIDER",
+                    "tipo_contagem": "Pallets",
+                    "quantidade_informada": 13,
+                    "quantidade_total_unidades": 14040,
+                    "timestamp": 1760469724.190506
+                }
+            ]
+        }
+    ]
+}
