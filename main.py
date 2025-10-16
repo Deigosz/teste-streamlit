@@ -258,7 +258,7 @@ def selecao_de_item():
         index=0,
         key="selectbox_item",
     )
-    
+    #i
     
     if item_selecionado_display != 'Selecione um produto ou comece a digitar...':
         item_selecionado = df_filtrado[df_filtrado['display'] == item_selecionado_display].iloc[0]
