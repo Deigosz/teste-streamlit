@@ -3,24 +3,37 @@ import os
 import pandas as pd
 from datetime import datetime
 
-def carregar_fichas(): return {"sheets": []}
-def salvar_fichas(data): pass
-def criar_ficha(nome): return {"name": nome, "data": []}
-def listar_fichas(): return ["Ficha de Exemplo 1"]
+if '_mock_fichas_storage' not in st.session_state:
+    st.session_state['_mock_fichas_storage'] = {
+        "sheets": [
+            {"name": "Ficha de Exemplo 1", "data": []}
+        ]
+    }
+
+def carregar_fichas():
+    return st.session_state['_mock_fichas_storage']
+
+def salvar_fichas(data):
+    st.session_state['_mock_fichas_storage'] = data
+
+def criar_ficha(nome):
+    return {"name": nome, "data": []}
+
+def listar_fichas():
+    return [sheet["name"] for sheet in st.session_state['_mock_fichas_storage']["sheets"]]
 
 BARRACAO_OPCOES = ["A", "B", "C", "D", "E"]
 
 def carregar_dados_produtos():
-    data = [
-        {'codigo_amarracao_imagem': '2320070006', 'codigo': '2320070006-109', 'descricao': 'BEB LACTEA ACHOCOLATADO SHEFA COM TAMPA 1000 ML', 'familia_comercial': 'Achoc - Litro', 'familia_material': 'ACHOCOL. 1000 ML SHEFA', 'qtd_por_caixa': 12, 'qtd_por_pallet': 85, 'qtd_por_camada': 17, 'marca': 'SHEFA', 'tipo': 'MIX'},
-        {'codigo_amarracao_imagem': '2320060011', 'codigo': '2320060011-109', 'descricao': 'BEB LACTEA ACHOCOLATADO SHEFA 200 ML', 'familia_comercial': 'Achoc - 200', 'familia_material': 'ACHOCOL. 200 ML SHEFA', 'qtd_por_caixa': 27, 'qtd_por_pallet': 170, 'qtd_por_camada': 17, 'marca': 'SHEFA', 'tipo': 'MIX'},
-        {'codigo_amarracao_imagem': '200150006', 'codigo': '200150006-109', 'descricao': 'ALIMENTO COM SOJA - SABOR ORIGINAL LIDER 1000 ML', 'familia_comercial': 'Soja - Originais', 'familia_material': 'ALIM. A BASE DE SOJA', 'qtd_por_caixa': 12, 'qtd_por_pallet': 85, 'qtd_por_camada': 17, 'marca': 'LIDER', 'tipo': 'MIX'},
-        {'codigo_amarracao_imagem': '2320090003', 'codigo': '2320090003-109', 'descricao': 'BEB LACTEA COM AVEIA SHEFA 1000 ML', 'familia_comercial': 'Aveia - Litro', 'familia_material': 'AVEIA 1000 ML SHEFA', 'qtd_por_caixa': 12, 'qtd_por_pallet': 85, 'qtd_por_camada': 17, 'marca': 'SHEFA', 'tipo': 'MIX'},
-        {'codigo_amarracao_imagem': '2320080006', 'codigo': '2320080006-109', 'descricao': 'BEB LACTEA COM AVEIA SHEFA 200 ML', 'familia_comercial': 'Aveia - 200', 'familia_material': 'AVEIA 200 ML SHEFA', 'qtd_por_caixa': 27, 'qtd_por_pallet': 170, 'qtd_por_camada': 17, 'marca': 'SHEFA', 'tipo': 'MIX'},
-        {'codigo_amarracao_imagem': '2120300001', 'codigo': '2120300001-106', 'descricao': 'REFRESCO SABORIZADO COM FRUTAS SHEFA - SABOR UVA 150 ML', 'familia_comercial': 'Beb de Fruta - 150', 'familia_material': 'BEB. FRUTAS 150 ML SHEFA', 'qtd_por_caixa': 27, 'qtd_por_pallet': 204, 'qtd_por_camada': 17, 'marca': 'SHEFA', 'tipo': 'BEBIDAS'}
-    ]
-    df = pd.DataFrame(data)
-    return df
+    caminho_produtos = "db/dbItens.csv" 
+    try:
+        df = pd.read_csv(caminho_produtos, sep=';')
+        return df
+    except pd.errors.ParserError as e:
+        st.error(f"Erro ao carregar dados: Verifique se o arquivo CSV '{caminho_produtos}' está formatado corretamente.")
+        st.error(f"Detalhes do erro: {e}")
+        return pd.DataFrame()
+
 
 @st.cache_data
 def get_produtos_df():
@@ -39,27 +52,26 @@ def criar_nova_ficha():
     nova_ficha = criar_ficha(nome_ficha)
     fichas_data["sheets"].append(nova_ficha)
     salvar_fichas(fichas_data)
-    st.toast(f"Ficha '{nome_ficha}' criada com sucesso!", icon="✅", duration=3)
     
-    if "fichas_lista" not in st.session_state:
-        st.session_state.fichas_lista = []
-    
-    st.session_state.fichas_lista.append(nome_ficha)
-    
+    st.session_state.fichas_lista = listar_fichas()
     st.session_state.ficha_atual = nome_ficha
+    
+    st.session_state.contagens_registradas = []
+    
+    st.toast(f"Ficha '{nome_ficha}' criada com sucesso!", icon="✅", duration=3)
 
 
 def ficha_management():
     st.subheader("Gerenciamento de Fichas")
     
-    if "fichas_lista" not in st.session_state:
-        st.session_state.fichas_lista = listar_fichas()
+    st.session_state.fichas_lista = listar_fichas()
         
-    if 'ficha_atual' not in st.session_state:
-        if st.session_state.fichas_lista:
-            st.session_state.ficha_atual = st.session_state.fichas_lista[0]
-        else:
-            st.session_state.ficha_atual = None
+    if 'ficha_atual' not in st.session_state and st.session_state.fichas_lista:
+        st.session_state.ficha_atual = st.session_state.fichas_lista[0]
+        fichas_data = carregar_fichas()
+        ficha_encontrada = next((f for f in fichas_data["sheets"] if f["name"] == st.session_state.ficha_atual), None)
+        st.session_state.contagens_registradas = ficha_encontrada["data"] if ficha_encontrada else []
+
 
     fichas_lista = st.session_state.fichas_lista
     st.write("Selecione uma ficha:") 
@@ -83,12 +95,21 @@ def ficha_management():
     
     if ficha_selecionada:
         if ficha_selecionada != st.session_state.ficha_atual:
-            st.toast(f"Ficha '{ficha_selecionada}' selecionada!", icon="📄", duration=3)
             st.session_state.ficha_atual = ficha_selecionada
+            
+            fichas_data = carregar_fichas()
+            ficha_encontrada = next((f for f in fichas_data["sheets"] if f["name"] == ficha_selecionada), None)
+            
+            if ficha_encontrada:
+                st.session_state.contagens_registradas = ficha_encontrada["data"]
+            else:
+                st.session_state.contagens_registradas = []
+            
+            st.toast(f"Ficha '{ficha_selecionada}' carregada com {len(st.session_state.contagens_registradas)} registros!", icon="📄", duration=3)
+            st.rerun()
+        
         st.info(f"Ficha selecionada: **{st.session_state.ficha_atual}**")
     
-
-
 def get_lista_ruas_sequenciais(num_ruas):
     return [f"{i:02}" for i in range(1, num_ruas + 1)]
 
@@ -149,14 +170,51 @@ if 'form_caixas_soltas_value' not in st.session_state:
     st.session_state.form_caixas_soltas_value = 0
 
 
+def salvar_e_visualizar_contagem(item_selecionado, pallets, caixas):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    
+    novo_registro = {
+        'Hora': timestamp,
+        'SKU': item_selecionado['codigo'],
+        'Descrição': item_selecionado['descricao'],
+        'Barracão': st.session_state.barracao_selecionado, 
+        'Rua Inicial': st.session_state.rua_inicial,
+        'Rua Final': st.session_state.rua_final, 
+        'Pallets': pallets,
+        'Caixas Soltas': caixas
+    }
+    
+    st.session_state.contagens_registradas.append(novo_registro)
+    
+    fichas_data = carregar_fichas()
+    ficha_atual_nome = st.session_state.ficha_atual
+    
+    for ficha in fichas_data["sheets"]:
+        if ficha["name"] == ficha_atual_nome:
+            ficha["data"] = st.session_state.contagens_registradas
+            break
+            
+    salvar_fichas(fichas_data)
+    
+    st.toast(f"✅ Item {item_selecionado['codigo']} registrado e salvo!", icon="📝")
+    
+    st.session_state.form_pallets_totais_value = 1
+    st.session_state.form_caixas_soltas_value = 0
+    st.rerun()
+
+
 def selecao_de_item():
     st.markdown("---")
     st.subheader("🔎 Busca e Seleção de Item")
 
     df_produtos = get_produtos_df()
+    
+    if df_produtos.empty:
+        st.warning("Não foi possível carregar os dados de produtos. Verifique o arquivo `db/dbItens.csv`.")
+        return 
 
     if 'display' not in df_produtos.columns:
-        df_produtos['display'] = df_produtos['codigo'] + ' - ' + df_produtos['descricao']
+        df_produtos['display'] = df_produtos['codigo'].astype(str) + ' - ' + df_produtos['descricao'].astype(str)
         
     col_filtro_marca, col_filtro_tipo = st.columns(2)
     
@@ -251,8 +309,8 @@ def selecao_de_item():
             rua_inicial = st.session_state.get('rua_inicial')
             
             if not (ficha_atual and barracao and rua_inicial):
-                 st.error("Selecione a Localização (Barracão/Rua) na seção acima.")
-                 return
+                st.error("Selecione a Localização (Barracão/Rua) na seção acima.")
+                return
             
             with st.form("form_contagem_rapida_integrada", clear_on_submit=False): 
                 
@@ -277,14 +335,43 @@ def selecao_de_item():
                 submitted = st.form_submit_button("💾 SALVAR CONTAGEM (ENTER)", type="primary", use_container_width=True)
 
             if submitted:
-                lista_ruas = get_lista_ruas_sequenciais(30)
-                rua_inicial_num = lista_ruas.index(st.session_state['rua_inicial']) + 1 
-                
-                st.toast(f"✅ Item {item_selecionado['codigo']} registrado!", icon="📝")
+                salvar_e_visualizar_contagem(item_selecionado, pallets_totais, caixas_soltas)
 
-                st.session_state.form_pallets_totais_value = 1
-                st.session_state.form_caixas_soltas_value = 0
-                st.rerun()
+            st.markdown("---")
+            st.markdown("##### Contagens Registradas nesta Ficha")
+            
+            if st.session_state.contagens_registradas:
+                df_registros = pd.DataFrame(st.session_state.contagens_registradas)
+
+                csv_data = df_registros.to_csv(index=False).encode('utf-8')
+                
+                col_tabela, col_download = st.columns([4, 1])
+
+                with col_tabela:
+                    st.dataframe(
+                        df_registros,
+                        column_order=["Hora", "SKU", "Barracão", "Rua Inicial", "Rua Final", "Pallets", "Caixas Soltas"],
+                        column_config={
+                            "Barracão": st.column_config.Column(width="small"),
+                            "Rua Inicial": st.column_config.Column("Rua Ini", width="small"),
+                            "Rua Final": st.column_config.Column("Rua Fim", width="small"),
+                        },
+                        hide_index=True,
+                        use_container_width=True,
+                        height=300
+                    )
+                
+                with col_download:
+                    st.download_button(
+                        label="⬇️ Download CSV",
+                        data=csv_data,
+                        file_name=f"{st.session_state.ficha_atual.replace(' | ', '_').replace('/', '-')}_export.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+            else:
+                st.info("Nenhuma contagem registrada para este item na ficha atual.")
+
     else:
         st.session_state.item_selecionado = None
         st.info("Aguardando seleção do item...")
