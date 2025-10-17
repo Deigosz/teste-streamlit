@@ -1,0 +1,19 @@
+{
+    "sheets": [
+        {
+            "name": "Ficha de Exemplo 1 (Padrão)",
+            "data": [
+                {
+                    "Hora": "11:04:03",
+                    "SKU": "2320080006-109",
+                    "Descrição": "BEB LACTEA COM AVEIA SHEFA 200 ML",
+                    "Barracão": "A",
+                    "Rua Inicial": "01",
+                    "Rua Final": "01",
+                    "Pallets": 1,
+                    "Caixas Soltas": 0
+                }
+            ]
+        }
+    ]
+}
